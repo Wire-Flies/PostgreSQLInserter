@@ -2,10 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 const pg = require('pg');
-const fileReader = require('./fileReader.js');
 const rimraf = require('rimraf');
 const unzip = require('unzip');
-//const {initDB, saveToDB} = require('./insertDB.js');
 const _ = require('lodash');
 const Pool = pg.Pool;
 const FAIL_HARD = false;
