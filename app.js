@@ -6,7 +6,12 @@ const rimraf = require('rimraf');
 const unzip = require('unzip');
 const _ = require('lodash');
 const Pool = pg.Pool;
+
+/*
+    IMPORTANT CONSTANTS
+*/
 const FAIL_HARD = false;
+const PRINT_ERRORS = false;
 const TEMP_DIR = './tmp';
 const MAX_CLIENTS = 20;
 
@@ -55,7 +60,7 @@ async function runAsync(){
         i++;
         const res = await insertFlights('', csv);
         //console.log('res ', res);
-        if(i % 10 === 0){
+        if(i % 1 === 0){
             console.log('Processed ' + i + ' flights, total allocated time: ' + (new Date().getTime() - startTime) / 1000);
         }
     }
@@ -78,7 +83,8 @@ async function createTemp(){
         fs.mkdir(TEMP_DIR, (err) => {
             console.log('fs.mkdir done');
             if(err){
-                console.log('ERRR: ', err);
+                if(PRINT_ERRORS)
+                    console.log('ERR: ', err);
                 return rej(err);
             }
             full();
@@ -92,7 +98,8 @@ async function rmTemp(){
         rimraf(TEMP_DIR, (err) => {
             console.log('rimraf done');
             if(err){
-                console.log('ERR: ', err);
+                if(PRINT_ERRORS)
+                    console.log('ERR: ', err);
                 return rej(err);
             }
             full();
@@ -162,7 +169,7 @@ async function processZipCSV(filePath){
             }
 
             row = row.split(',');
-            return pool.query('INSERT INTO flight_data(aircraft_id,snapshot_id,altitude,heading,latitude,longitude,radar_id,speed,squawk) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
+            return pool.query('INSERT INTO flight_data(flight_id,snapshot_id,altitude,heading,latitude,longitude,radar_id,speed,squawk) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)', [
                 flightId, row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7] 
             ]);
         });
@@ -227,7 +234,8 @@ async function insertFlights(key, flightPath){
         return Promise.all(insertPromises).then(() => {
             return new Promise((full) => full());
         }).catch((err) => {
-            console.log(err);
+            if(PRINT_ERRORS)
+                console.log('ERR: ', err);
             if(FAIL_HARD){
                 return new Promise((full,rej) => rej(err));
             }
@@ -245,6 +253,8 @@ async function initDB(connectionString){
     return pool.query('DROP TABLE IF EXISTS flights').then(() => {
         return pool.query('DROP TABLE IF EXISTS flight_data');
     }).then(() => {
+        return pool.query('DROP INDEX IF EXISTS flight_id_index');
+    }).then(() => {
         let promises = [
             pool.query('CREATE TABLE IF NOT EXISTS flights ( flight_id bigint PRIMARY KEY,\
                 aircraft_id bigint,\
@@ -257,7 +267,7 @@ async function initDB(connectionString){
                 real_to VARCHAR,\
                 reserved VARCHAR)'),
             pool.query('CREATE TABLE IF NOT EXISTS flight_data (id bigserial PRIMARY KEY,\
-                aircraft_id bigint,\
+                flight_id bigint,\
                 snapshot_id bigint NOT NULL,\
                 altitude int,\
                 heading real,\
@@ -268,6 +278,7 @@ async function initDB(connectionString){
                 squawk VARCHAR,\
                 vert_speed real,\
                 on_ground boolean)'),
+            pool.query('CREATE INDEX flight_id_index ON flight_data (flight_id)')
         ];
     
         return Promise.all(promises);
